@@ -1,64 +1,164 @@
-import type { Metadata } from 'next';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Global Market View',
-  description: 'View-only market dashboard'
+import { useEffect, useMemo, useState } from 'react';
+
+type Trend = 'up' | 'down';
+
+type MarketRow = {
+  pair: string;
+  value: string;
+  change: string;
+  trend: Trend;
 };
 
+type CryptoRow = {
+  symbol: string;
+  name: string;
+  price: string;
+  change: string;
+  trend: Trend;
+};
+
+type StockRow = {
+  symbol: string;
+  name: string;
+  price: string;
+  change: string;
+  trend: Trend;
+};
+
+type CompanyCard = {
+  name: string;
+  ticker: string;
+  sector: string;
+  marketCap: string;
+  country: string;
+  sentiment: string;
+};
+
+const initialCurrencyRows: MarketRow[] = [
+  { pair: 'USD/EUR', value: '0.92', change: '+0.18%', trend: 'up' },
+  { pair: 'USD/GBP', value: '0.78', change: '+0.11%', trend: 'up' },
+  { pair: 'JPY/USD', value: '157.40', change: '-0.42%', trend: 'down' },
+  { pair: 'AUD/USD', value: '1.52', change: '+0.34%', trend: 'up' },
+  { pair: 'USD/CAD', value: '1.36', change: '-0.09%', trend: 'down' },
+  { pair: 'CHF/USD', value: '0.89', change: '+0.15%', trend: 'up' }
+];
+
+const initialIndexRows: MarketRow[] = [
+  { pair: 'S&P 500', value: '5,422.12', change: '+1.22%', trend: 'up' },
+  { pair: 'Nasdaq', value: '17,930.44', change: '+1.68%', trend: 'up' },
+  { pair: 'Dow Jones', value: '39,842.17', change: '+0.74%', trend: 'up' },
+  { pair: 'FTSE 100', value: '8,187.33', change: '+0.51%', trend: 'up' },
+  { pair: 'Nikkei 225', value: '39,246.91', change: '-0.34%', trend: 'down' }
+];
+
+const initialCryptoRows: CryptoRow[] = [
+  { symbol: 'BTC', name: 'Bitcoin', price: '$67,430', change: '+2.13%', trend: 'up' },
+  { symbol: 'ETH', name: 'Ethereum', price: '$3,470', change: '+1.94%', trend: 'up' },
+  { symbol: 'SOL', name: 'Solana', price: '$162.54', change: '+4.41%', trend: 'up' },
+  { symbol: 'XRP', name: 'Ripple', price: '$0.62', change: '+0.76%', trend: 'up' }
+];
+
+const initialLeadingStocks: StockRow[] = [
+  { symbol: 'NVDA', name: 'NVIDIA', price: '$126.84', change: '+3.82%', trend: 'up' },
+  { symbol: 'MSFT', name: 'Microsoft', price: '$458.72', change: '+1.46%', trend: 'up' },
+  { symbol: 'AAPL', name: 'Apple', price: '$217.35', change: '+0.91%', trend: 'up' },
+  { symbol: 'AMZN', name: 'Amazon', price: '$188.53', change: '+2.11%', trend: 'up' },
+  { symbol: 'TSLA', name: 'Tesla', price: '$253.69', change: '-1.53%', trend: 'down' }
+];
+
+const companyCards: CompanyCard[] = [
+  { name: 'Apple', ticker: 'AAPL', sector: 'Technology', marketCap: '$3.0T', country: 'US', sentiment: 'Bullish' },
+  { name: 'Tesla', ticker: 'TSLA', sector: 'Automotive', marketCap: '$844B', country: 'US', sentiment: 'Neutral' },
+  { name: 'LVMH', ticker: 'MC.PA', sector: 'Luxury', marketCap: '$370B', country: 'FR', sentiment: 'Positive' },
+  { name: 'SAP', ticker: 'SAP', sector: 'Software', marketCap: '$355B', country: 'DE', sentiment: 'Bullish' }
+];
+
+const marketNews = [
+  { title: 'Global tech rally lifts equity markets across Europe and the US', time: '14 min ago', tag: 'Markets' },
+  { title: 'Dollar steadies as traders assess Fed outlook and inflation data', time: '32 min ago', tag: 'Forex' },
+  { title: 'Oil prices edge lower after supply outlook softens ahead of Friday close', time: '1 hr ago', tag: 'Commodities' },
+  { title: 'AI chipmakers lead gains in semiconductor sector', time: '2 hr ago', tag: 'Tech' }
+];
+
+const watchlist = ['AAPL', 'MSFT', 'NVDA', 'EUR/USD', 'BTC', 'XAU/USD'];
+const sparkline = 'M 0 80 C 30 70, 60 60, 90 62 S 150 30, 180 45 S 220 35, 260 25 S 300 15, 340 18';
+
+async function fetchForexRates(): Promise<MarketRow[]> {
+  try {
+    const response = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR,GBP,JPY,CAD,AUD,CHF', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Forex fallback');
+    const data = await response.json();
+    const rates = data.rates ?? {};
+
+    return [
+      { pair: 'USD/EUR', value: (1 / (rates.EUR ?? 0.92)).toFixed(2), change: '+0.18%', trend: 'up' },
+      { pair: 'USD/GBP', value: (1 / (rates.GBP ?? 0.78)).toFixed(2), change: '+0.11%', trend: 'up' },
+      { pair: 'JPY/USD', value: (rates.JPY ?? 157.4).toFixed(2), change: '-0.42%', trend: 'down' },
+      { pair: 'AUD/USD', value: (1 / (rates.AUD ?? 1.52)).toFixed(2), change: '+0.34%', trend: 'up' },
+      { pair: 'USD/CAD', value: (1 / (rates.CAD ?? 1.36)).toFixed(2), change: '-0.09%', trend: 'down' },
+      { pair: 'CHF/USD', value: (1 / (rates.CHF ?? 0.89)).toFixed(2), change: '+0.15%', trend: 'up' }
+    ];
+  } catch {
+    return initialCurrencyRows;
+  }
+}
+
+async function fetchCryptoRows(): Promise<CryptoRow[]> {
+  try {
+    const response = await fetch(
+      'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,solana,ripple&price_change_percentage=24h',
+      { cache: 'no-store' }
+    );
+
+    if (!response.ok) throw new Error('Crypto fallback');
+    const data = await response.json();
+
+    return data.map((coin: any) => ({
+      symbol: coin.symbol.toUpperCase(),
+      name: coin.name,
+      price: `$${Number(coin.current_price).toLocaleString(undefined, { maximumFractionDigits: coin.current_price < 1 ? 4 : 0 })}`,
+      change: `${coin.price_change_percentage_24h >= 0 ? '+' : ''}${coin.price_change_percentage_24h.toFixed(2)}%`,
+      trend: coin.price_change_percentage_24h >= 0 ? 'up' : 'down'
+    }));
+  } catch {
+    return initialCryptoRows;
+  }
+}
+
+function formatChange(value: string, trend: Trend) {
+  return <span className={`font-medium ${trend === 'up' ? 'text-green' : 'text-red'}`}>{value}</span>;
+}
+
 export default function Page() {
-  const currencyRows = [
-    { pair: 'USD/EUR', value: '0.92', change: '+0.18%', trend: 'up' },
-    { pair: 'USD/GBP', value: '0.78', change: '+0.11%', trend: 'up' },
-    { pair: 'JPY/USD', value: '157.40', change: '-0.42%', trend: 'down' },
-    { pair: 'AUD/USD', value: '1.52', change: '+0.34%', trend: 'up' },
-    { pair: 'USD/CAD', value: '1.36', change: '-0.09%', trend: 'down' },
-    { pair: 'CHF/USD', value: '0.89', change: '+0.15%', trend: 'up' }
-  ];
+  const [currencyRows, setCurrencyRows] = useState<MarketRow[]>(initialCurrencyRows);
+  const [indexRows] = useState<MarketRow[]>(initialIndexRows);
+  const [cryptoRows, setCryptoRows] = useState<CryptoRow[]>(initialCryptoRows);
+  const [leadingStocks] = useState<StockRow[]>(initialLeadingStocks);
+  const [loading, setLoading] = useState(true);
 
-  const indexRows = [
-    { name: 'S&P 500', value: '5,422.12', change: '+1.22%', trend: 'up' },
-    { name: 'Nasdaq', value: '17,930.44', change: '+1.68%', trend: 'up' },
-    { name: 'Dow Jones', value: '39,842.17', change: '+0.74%', trend: 'up' },
-    { name: 'FTSE 100', value: '8,187.33', change: '+0.51%', trend: 'up' },
-    { name: 'Nikkei 225', value: '39,246.91', change: '-0.34%', trend: 'down' }
-  ];
+  useEffect(() => {
+    let mounted = true;
 
-  const leadingStocks = [
-    { symbol: 'NVDA', name: 'NVIDIA', price: '$126.84', change: '+3.82%', trend: 'up' },
-    { symbol: 'MSFT', name: 'Microsoft', price: '$458.72', change: '+1.46%', trend: 'up' },
-    { symbol: 'AAPL', name: 'Apple', price: '$217.35', change: '+0.91%', trend: 'up' },
-    { symbol: 'AMZN', name: 'Amazon', price: '$188.53', change: '+2.11%', trend: 'up' },
-    { symbol: 'TSLA', name: 'Tesla', price: '$253.69', change: '-1.53%', trend: 'down' }
-  ];
+    async function loadData() {
+      try {
+        const [fx, crypto] = await Promise.all([fetchForexRates(), fetchCryptoRows()]);
+        if (!mounted) return;
+        setCurrencyRows(fx);
+        setCryptoRows(crypto);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
 
-  const cryptoRows = [
-    { symbol: 'BTC', name: 'Bitcoin', price: '$67,430', change: '+2.13%', trend: 'up' },
-    { symbol: 'ETH', name: 'Ethereum', price: '$3,470', change: '+1.94%', trend: 'up' },
-    { symbol: 'SOL', name: 'Solana', price: '$162.54', change: '+4.41%', trend: 'up' },
-    { symbol: 'XRP', name: 'Ripple', price: '$0.62', change: '+0.76%', trend: 'up' }
-  ];
+    loadData();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  const companyCards = [
-    { name: 'Apple', ticker: 'AAPL', sector: 'Technology', marketCap: '$3.0T', country: 'US', sentiment: 'Bullish' },
-    { name: 'Tesla', ticker: 'TSLA', sector: 'Automotive', marketCap: '$844B', country: 'US', sentiment: 'Neutral' },
-    { name: 'LVMH', ticker: 'MC.PA', sector: 'Luxury', marketCap: '$370B', country: 'FR', sentiment: 'Positive' },
-    { name: 'SAP', ticker: 'SAP', sector: 'Software', marketCap: '$355B', country: 'DE', sentiment: 'Bullish' }
-  ];
-
-  const marketNews = [
-    { title: 'Global tech rally lifts equity markets across Europe and the US', time: '14 min ago', tag: 'Markets' },
-    { title: 'Dollar steadies as traders assess Fed outlook and inflation data', time: '32 min ago', tag: 'Forex' },
-    { title: 'Oil prices edge lower after supply outlook softens ahead of Friday close', time: '1 hr ago', tag: 'Commodities' },
-    { title: 'AI chipmakers lead gains in semiconductor sector', time: '2 hr ago', tag: 'Tech' }
-  ];
-
-  const watchlist = ['AAPL', 'MSFT', 'NVDA', 'EUR/USD', 'BTC', 'XAU/USD'];
-
-  const sparkline = 'M 0 80 C 30 70, 60 60, 90 62 S 150 30, 180 45 S 220 35, 260 25 S 300 15, 340 18';
-
-  const formatChange = (value: string, trend: string) => (
-    <span className={`font-medium ${trend === 'up' ? 'text-green' : 'text-red'}`}>{value}</span>
-  );
+  const portfolioValue = useMemo(() => '$184,260', []);
 
   return (
     <main className="min-h-screen bg-background text-slate-100">
@@ -87,7 +187,7 @@ export default function Page() {
               UTC 14:32
             </div>
             <button className="rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-glow">
-              Live Feed
+              {loading ? 'Loading...' : 'Live Feed'}
             </button>
           </div>
         </header>
@@ -236,9 +336,9 @@ export default function Page() {
 
             <div className="space-y-3">
               {indexRows.map((row) => (
-                <div key={row.name} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-3">
+                <div key={row.pair} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-3">
                   <div>
-                    <p className="font-medium text-slate-200">{row.name}</p>
+                    <p className="font-medium text-slate-200">{row.pair}</p>
                     <p className="text-xs text-slate-500">{row.value}</p>
                   </div>
                   {formatChange(row.change, row.trend)}
@@ -355,7 +455,7 @@ export default function Page() {
 
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Total value</p>
-              <p className="mt-2 text-3xl font-semibold text-slate-100">$184,260</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-100">{portfolioValue}</p>
               <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
                 <span>Day change</span>
                 <span className="text-green">+2.14%</span>
