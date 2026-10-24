@@ -36,7 +36,13 @@ type CompanyCard = {
   sentiment: string;
 };
 
-const initialCurrencyRows: MarketRow[] = [
+type QuotePayload = {
+  price?: number | string;
+  percent_change?: number | string;
+  change?: number | string;
+};
+
+const DEFAULT_CURRENCY_ROWS: MarketRow[] = [
   { pair: 'USD/EUR', value: '0.92', change: '+0.18%', trend: 'up' },
   { pair: 'USD/GBP', value: '0.78', change: '+0.11%', trend: 'up' },
   { pair: 'JPY/USD', value: '157.40', change: '-0.42%', trend: 'down' },
@@ -45,7 +51,7 @@ const initialCurrencyRows: MarketRow[] = [
   { pair: 'CHF/USD', value: '0.89', change: '+0.15%', trend: 'up' }
 ];
 
-const initialIndexRows: MarketRow[] = [
+const DEFAULT_INDEX_ROWS: MarketRow[] = [
   { pair: 'S&P 500', value: '5,422.12', change: '+1.22%', trend: 'up' },
   { pair: 'Nasdaq', value: '17,930.44', change: '+1.68%', trend: 'up' },
   { pair: 'Dow Jones', value: '39,842.17', change: '+0.74%', trend: 'up' },
@@ -53,14 +59,14 @@ const initialIndexRows: MarketRow[] = [
   { pair: 'Nikkei 225', value: '39,246.91', change: '-0.34%', trend: 'down' }
 ];
 
-const initialCryptoRows: CryptoRow[] = [
+const DEFAULT_CRYPTO_ROWS: CryptoRow[] = [
   { symbol: 'BTC', name: 'Bitcoin', price: '$67,430', change: '+2.13%', trend: 'up' },
   { symbol: 'ETH', name: 'Ethereum', price: '$3,470', change: '+1.94%', trend: 'up' },
   { symbol: 'SOL', name: 'Solana', price: '$162.54', change: '+4.41%', trend: 'up' },
   { symbol: 'XRP', name: 'Ripple', price: '$0.62', change: '+0.76%', trend: 'up' }
 ];
 
-const initialLeadingStocks: StockRow[] = [
+const DEFAULT_LEADING_STOCKS: StockRow[] = [
   { symbol: 'NVDA', name: 'NVIDIA', price: '$126.84', change: '+3.82%', trend: 'up' },
   { symbol: 'MSFT', name: 'Microsoft', price: '$458.72', change: '+1.46%', trend: 'up' },
   { symbol: 'AAPL', name: 'Apple', price: '$217.35', change: '+0.91%', trend: 'up' },
@@ -68,27 +74,45 @@ const initialLeadingStocks: StockRow[] = [
   { symbol: 'TSLA', name: 'Tesla', price: '$253.69', change: '-1.53%', trend: 'down' }
 ];
 
-const companyCards: CompanyCard[] = [
+const COMPANY_CARDS: CompanyCard[] = [
   { name: 'Apple', ticker: 'AAPL', sector: 'Technology', marketCap: '$3.0T', country: 'US', sentiment: 'Bullish' },
   { name: 'Tesla', ticker: 'TSLA', sector: 'Automotive', marketCap: '$844B', country: 'US', sentiment: 'Neutral' },
   { name: 'LVMH', ticker: 'MC.PA', sector: 'Luxury', marketCap: '$370B', country: 'FR', sentiment: 'Positive' },
   { name: 'SAP', ticker: 'SAP', sector: 'Software', marketCap: '$355B', country: 'DE', sentiment: 'Bullish' }
 ];
 
-const marketNews = [
+const MARKET_NEWS = [
   { title: 'Global tech rally lifts equity markets across Europe and the US', time: '14 min ago', tag: 'Markets' },
   { title: 'Dollar steadies as traders assess Fed outlook and inflation data', time: '32 min ago', tag: 'Forex' },
   { title: 'Oil prices edge lower after supply outlook softens ahead of Friday close', time: '1 hr ago', tag: 'Commodities' },
   { title: 'AI chipmakers lead gains in semiconductor sector', time: '2 hr ago', tag: 'Tech' }
 ];
 
-const watchlist = ['AAPL', 'MSFT', 'NVDA', 'EUR/USD', 'BTC', 'XAU/USD'];
-const sparkline = 'M 0 80 C 30 70, 60 60, 90 62 S 150 30, 180 45 S 220 35, 260 25 S 300 15, 340 18';
+const WATCHLIST = ['AAPL', 'MSFT', 'NVDA', 'EUR/USD', 'BTC', 'XAU/USD'];
+
+async function fetchTwelveDataQuote(symbol: string): Promise<QuotePayload | null> {
+  try {
+    const response = await fetch(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&apikey=demo`, {
+      cache: 'no-store'
+    });
+
+    if (!response.ok) return null;
+    const data = (await response.json()) as QuotePayload & { status?: string };
+
+    if (data.status === 'error' || !data) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
 
 async function fetchForexRates(): Promise<MarketRow[]> {
   try {
-    const response = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR,GBP,JPY,CAD,AUD,CHF', { cache: 'no-store' });
-    if (!response.ok) throw new Error('Forex fallback');
+    const response = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR,GBP,JPY,CAD,AUD,CHF', {
+      cache: 'no-store'
+    });
+
+    if (!response.ok) throw new Error('fx unavailable');
     const data = await response.json();
     const rates = data.rates ?? {};
 
@@ -101,7 +125,7 @@ async function fetchForexRates(): Promise<MarketRow[]> {
       { pair: 'CHF/USD', value: (1 / (rates.CHF ?? 0.89)).toFixed(2), change: '+0.15%', trend: 'up' }
     ];
   } catch {
-    return initialCurrencyRows;
+    return DEFAULT_CURRENCY_ROWS;
   }
 }
 
@@ -112,7 +136,7 @@ async function fetchCryptoRows(): Promise<CryptoRow[]> {
       { cache: 'no-store' }
     );
 
-    if (!response.ok) throw new Error('Crypto fallback');
+    if (!response.ok) throw new Error('crypto unavailable');
     const data = await response.json();
 
     return data.map((coin: any) => ({
@@ -123,8 +147,91 @@ async function fetchCryptoRows(): Promise<CryptoRow[]> {
       trend: coin.price_change_percentage_24h >= 0 ? 'up' : 'down'
     }));
   } catch {
-    return initialCryptoRows;
+    return DEFAULT_CRYPTO_ROWS;
   }
+}
+
+async function fetchIndexRows(): Promise<MarketRow[]> {
+  const symbols = [
+    { pair: 'S&P 500', symbol: 'SPX' },
+    { pair: 'Nasdaq', symbol: 'IXIC' },
+    { pair: 'Dow Jones', symbol: 'DJI' },
+    { pair: 'FTSE 100', symbol: 'UKX' },
+    { pair: 'Nikkei 225', symbol: '^N225' }
+  ];
+
+  const rows = await Promise.all(
+    symbols.map(async (entry) => {
+      const quote = await fetchTwelveDataQuote(entry.symbol);
+      if (!quote || quote.price == null) {
+        const fallback = DEFAULT_INDEX_ROWS.find((row) => row.pair === entry.pair);
+        return fallback ?? { pair: entry.pair, value: '—', change: '0.00%', trend: 'up' };
+      }
+
+      const price = Number(quote.price);
+      const pct = Number(quote.percent_change ?? quote.change ?? 0);
+      const trend = pct >= 0 ? 'up' : 'down';
+
+      return {
+        pair: entry.pair,
+        value: price.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+        change: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`,
+        trend
+      };
+    })
+  );
+
+  return rows;
+}
+
+async function fetchStockRows(): Promise<StockRow[]> {
+  const symbols = [
+    { symbol: 'NVDA', name: 'NVIDIA' },
+    { symbol: 'MSFT', name: 'Microsoft' },
+    { symbol: 'AAPL', name: 'Apple' },
+    { symbol: 'AMZN', name: 'Amazon' },
+    { symbol: 'TSLA', name: 'Tesla' }
+  ];
+
+  const rows = await Promise.all(
+    symbols.map(async ({ symbol, name }) => {
+      const quote = await fetchTwelveDataQuote(symbol);
+      if (!quote || quote.price == null) {
+        const fallback = DEFAULT_LEADING_STOCKS.find((row) => row.symbol === symbol);
+        return fallback ?? { symbol, name, price: '—', change: '0.00%', trend: 'up' };
+      }
+
+      const price = Number(quote.price);
+      const pct = Number(quote.percent_change ?? quote.change ?? 0);
+      const trend = pct >= 0 ? 'up' : 'down';
+
+      return {
+        symbol,
+        name,
+        price: `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+        change: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`,
+        trend
+      };
+    })
+  );
+
+  return rows;
+}
+
+function buildSparkline(values: number[]): string {
+  if (!values.length) return 'M 0 80 C 30 70, 60 60, 90 62 S 150 30, 180 45 S 220 35, 260 25 S 300 15, 340 18';
+
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+
+  return values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * 340;
+      const y = 100 - ((value - min) / range) * 70;
+      return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+    })
+    .join(' ');
 }
 
 function formatChange(value: string, trend: Trend) {
@@ -132,30 +239,43 @@ function formatChange(value: string, trend: Trend) {
 }
 
 export default function Page() {
-  const [currencyRows, setCurrencyRows] = useState<MarketRow[]>(initialCurrencyRows);
-  const [indexRows] = useState<MarketRow[]>(initialIndexRows);
-  const [cryptoRows, setCryptoRows] = useState<CryptoRow[]>(initialCryptoRows);
-  const [leadingStocks] = useState<StockRow[]>(initialLeadingStocks);
+  const [currencyRows, setCurrencyRows] = useState<MarketRow[]>(DEFAULT_CURRENCY_ROWS);
+  const [indexRows, setIndexRows] = useState<MarketRow[]>(DEFAULT_INDEX_ROWS);
+  const [cryptoRows, setCryptoRows] = useState<CryptoRow[]>(DEFAULT_CRYPTO_ROWS);
+  const [leadingStocks, setLeadingStocks] = useState<StockRow[]>(DEFAULT_LEADING_STOCKS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
     async function loadData() {
       try {
-        const [fx, crypto] = await Promise.all([fetchForexRates(), fetchCryptoRows()]);
-        if (!mounted) return;
+        const [fx, idx, crypto, stocks] = await Promise.all([
+          fetchForexRates(),
+          fetchIndexRows(),
+          fetchCryptoRows(),
+          fetchStockRows()
+        ]);
+
+        if (!active) return;
         setCurrencyRows(fx);
+        setIndexRows(idx);
         setCryptoRows(crypto);
+        setLeadingStocks(stocks);
       } finally {
-        if (mounted) setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
     loadData();
     return () => {
-      mounted = false;
+      active = false;
     };
+  }, []);
+
+  const sparkLine = useMemo(() => {
+    const values = [52, 55, 58, 60, 62, 59, 63];
+    return buildSparkline(values);
   }, []);
 
   const portfolioValue = useMemo(() => '$184,260', []);
@@ -249,12 +369,9 @@ export default function Page() {
             </div>
 
             <div className="flex items-end gap-2">
-              <div className="w-12 text-xs text-slate-400">Mon</div>
-              <div className="w-12 text-xs text-slate-400">Tue</div>
-              <div className="w-12 text-xs text-slate-400">Wed</div>
-              <div className="w-12 text-xs text-slate-400">Thu</div>
-              <div className="w-12 text-xs text-slate-400">Fri</div>
-              <div className="w-12 text-xs text-slate-400">Sat</div>
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                <div key={d} className="w-12 text-xs text-slate-400">{d}</div>
+              ))}
             </div>
 
             <svg viewBox="0 0 340 120" className="mt-4 h-36 w-full overflow-visible">
@@ -264,7 +381,7 @@ export default function Page() {
                   <stop offset="100%" stopColor="#3ec9ff" />
                 </linearGradient>
               </defs>
-              <path d={sparkline} fill="none" stroke="url(#lineGlow)" strokeWidth="3" strokeLinecap="round" />
+              <path d={sparkLine} fill="none" stroke="url(#lineGlow)" strokeWidth="3" strokeLinecap="round" />
             </svg>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -292,7 +409,7 @@ export default function Page() {
             </div>
 
             <div className="space-y-3">
-              {watchlist.map((item, index) => (
+              {WATCHLIST.map((item, index) => (
                 <div key={item} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-3">
                   <div>
                     <p className="text-sm font-medium text-slate-200">{item}</p>
@@ -408,7 +525,7 @@ export default function Page() {
             </div>
 
             <div className="space-y-3">
-              {companyCards.map((company) => (
+              {COMPANY_CARDS.map((company) => (
                 <div key={company.ticker} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -435,7 +552,7 @@ export default function Page() {
             </div>
 
             <div className="space-y-3">
-              {marketNews.map((item) => (
+              {MARKET_NEWS.map((item) => (
                 <div key={item.title} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-violet-300">{item.tag}</span>
